@@ -1,3 +1,8 @@
+#!/usr/bin/python
+# marek kuczynski
+# @marekq
+# www.marek.rocks
+
 import boto3, datetime, os, time
 
 # add your boto3 profile name and EC2 region, see ~/.aws/config and ~/.aws/credentials
