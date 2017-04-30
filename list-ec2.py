@@ -12,6 +12,8 @@ region 		= 'eu-west-1'
 
 ### DO NOT EDIT ANYTHING BELOW THIS LINE ### 
 
+
+vtags		= []
 resu		= []
 
 cpath       = os.getcwd()
@@ -25,26 +27,15 @@ unixti      = int(time.time())
 
 
 def get_ec2(prof, reg):
-	global tagline
+	# use the temporary credentials to retrieve EC2 data from the API
+	session 	= boto3.session.Session(profile_name = prof)
+	sts_client	= session.client('ec2', region_name = reg) 
 
 	# tags to print in csv
 	tags1		= ['PrivateIpAddress','PublicIpAddress','Platform','InstanceId','VpcId','InstanceType','PublicDnsName','Hypervisor','LaunchTime','KernelId','Platform','Architecture','VirtualizationType','InstanceLifecycle','PrivateDnsName','PublicDnsName','ImageId','SubnetId']
 	tags2		= {'Placement' : 'AvailabilityZone', 'State' : 'Name', 'StateReason' : 'Message', 'Monitoring' : 'State'}
 
-	t1			= str(','.join(tags1))+','
-
-	# construct t3 headers
-	t2			= ''
-	for k, v in tags2.items():
-	        t2 += k+','
-
-	t3			= 'SecurityGroups,unix-time,date-time'
-	tagline		= t1+t2+t3
-
-	# use the temporary credentials to retrieve EC2 data from the API
-	session 	= boto3.session.Session(profile_name = prof)
-	sts_client	= session.client('ec2', region_name = reg) 
-
+	# run describe_instances against EC2 API
 	try:
 		x		= sts_client.describe_instances()
 		found	= True
@@ -58,8 +49,9 @@ def get_ec2(prof, reg):
 			for a in res['Instances']:
 				z1 = []
 				z2 = []
-				z3 = ''
+				z3 = []
 				z4 = []
+				z5 = []
 
 				# iterate top level tags
 				for tag in tags1:
@@ -76,7 +68,7 @@ def get_ec2(prof, reg):
 					except:
 						z1.append('')
 
-				# iterate the variable tags of the instance
+				# iterate the known, default tags of the instance
 				for k, v in tags2.items():
 					try:
 						z 		= a[k][v]
@@ -85,30 +77,55 @@ def get_ec2(prof, reg):
 					except:
 						z2.append('')
 
+				# iterate the variable tags defined by the user of the instance
+				for k in a['Tags']:
+					
+					ke	= k['Key'] 
+					va 	= k['Value']
+						
+					if ke not in vtags:
+						vtags.append(ke)
+
+					z3.append(va)
+
 				# iterate the security groups of the instance
 				try:
 					y			= a['SecurityGroups']
 
 					for item in y:
 						z		= item['GroupId']
-						z3 		+= str(z)+' '
+						z4.append(str(z)+' ')
 
 				except:
 					pass
 
 				# print the ARN of the lookup, the unix time of the scan and the date time of the scan
-				z4		= get_ts()
-				zz 		= z1 + z2 + [z3] + z4
+				z5		= get_ts()
+				zz 		= "'"+"','".join(z1 + z2 + z3 + z4 + z5)+"'"
 
-				# print columns from the result csv on screen
-				x		= [1, 0, 5, 8, 16, 20, 21, 22]
-				y 		= ''
+				resu.append(zz)
+				print zz
 
-				for i in x:
-					y 	+= zz[i]+' \t '
 
-				print y[:-2].strip()
-				resu.append(','.join(zz))
+	# create the headerline of the csv file and store it in a global variable
+	global tagline
+
+	# construct EC2 instance details
+	t1			= tags1
+
+	# construct instance placement headers
+	t2			= []
+	for k, v in tags2.items():
+	    t2.append(k)
+
+	# construct EC2 user defined tags
+	t3			= vtags
+
+	# construct EC2 security groups and timestamps
+	t4			= ['SecurityGroups','unix-time','date-time']
+	
+	t5			= t1+t2+t3+t4
+	tagline 		= "'"+"','".join([unicode(i) for i in t5])+"'"
 
 
 def get_ts():
@@ -138,6 +155,7 @@ def write_res():
 
 
 # # # # # #
+# run the functions and exit
 
 get_ec2(profile, region)
 write_res()
